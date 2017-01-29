@@ -9,21 +9,10 @@ use strict;
 
 require Exporter;
 
-use vars qw/ @ISA @EXPORT $VERSION/;
+use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-@EXPORT = qw(
-        _add _mul _div _mod _sub
-        _new _from_hex _from_bin
-        _str _num _acmp _len
-        _digit
-        _is_zero _is_one
-        _is_even _is_odd
-        _check _zero _one _copy _len
-	_pow _dec _inc _gcd
-	_and _or _xor
-);
-$VERSION = '1.03';
+$VERSION = '1.04';
 
 use Bit::Vector;
 
@@ -48,7 +37,7 @@ sub _new
 
   my $bits = (10*length($$d) / 3);	# 1000 => 10 bits, 1000000 => 20
   $bits = (int($bits / $chunk) + 1) * $chunk;
- 
+
   my $u = Bit::Vector->new_Dec($bits,$$d);
   return __reduce($u);
   }                                                                             
@@ -98,6 +87,9 @@ sub max
   return $m;
   } 
 
+# catch and throw away
+sub import { }
+
 ##############################################################################
 # convert back to string and number
 
@@ -105,7 +97,7 @@ sub _str
   {
   # make string
   my $x = $_[1]->to_Dec(); 
-  return \$x;
+  \$x;
   }                                                                             
 
 sub _num
@@ -116,6 +108,21 @@ sub _num
   return $x;
   }
 
+sub _as_hex
+  {
+  my $x = $_[1]->to_Hex();
+  $x =~ s/^[0]+//;
+  $x = '0x' . $x;
+  \$x;
+  }
+
+sub _as_bin
+  {
+  my $x = $_[1]->to_Bin();
+  $x =~ s/^[0]+//;
+  $x = '0b' . $x;
+  \$x;
+  }
 
 ##############################################################################
 # actual math code
@@ -392,6 +399,11 @@ sub _acmp
   return $x->Lexicompare($y);
   }
 
+sub _len_bits
+  {
+  return int($_[1]->Max() * 0.3 * 1.004 + 0.5)+1;
+  }
+
 sub _len
   {
   # return length, aka digits in decmial, costly!!
@@ -486,7 +498,8 @@ sub __reduce
   # internal reduction to make minimum size
   my ($bv) = @_;
 
-  #print "reduce: ",$bv->Size()," max: ",$bv->Max(),"\n";
+  return $bv;
+  # print "reduce: ",$bv->Size()," max: ",$bv->Max(),"\n";
   my $size = $bv->Size();
   return $bv if $size <= $chunk;			# not smaller
 
@@ -502,7 +515,8 @@ sub __reduce
     #print "r $real_size $size\n";	
     my $new_size = $size;
     $new_size = (int($real_size / $chunk) + 1) * $chunk;
-    #print "Resize $size => $new_size\n";
+    #print "Resize $size => $new_size (by ",
+    # $size-$new_size, " bits or ",int(10000-10000*$new_size/$size)/100,"%)\n";
     $bv->Resize($new_size) if $new_size != $size;
     }
   return $bv;
@@ -519,6 +533,9 @@ Math::BigInt::BitVect - Use Bit::Vector for Math::BigInt routines
 
 Provides support for big integer calculations via means of Bit::Vector, a
 fast C library by Steffen Beier.
+
+See the section PERFORMANCE in L<Math::BigInt> for when to use this module and
+when not.
 
 =head1 LICENSE
  
