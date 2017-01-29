@@ -19,6 +19,51 @@
 2001-11-11 v1.06 Tels
  * made _inc/_dec faster and added tests for them
  * fixed bug in __reduce() that made it never  work (oups, forgot debug again)
+2002-02-10 v1.07 Tels
+ * added _lsft() and _rsft() for more speed on shifting
+ * tests from MBI v1.50 (3685 vs. 2932 tests)
+2002-02-19 v1.08 Tels
+ * streamlined some functions (removed return)
+ * _mul() does no longer create a result of max($m,$n)*2, but a $m+$n+2 bits
+   Quite some performance gains when $m much is greater/smaller than $n.
+   The improvement for small numbers is due to the saved call to max()
+
+	Sat Feb 16 19:12:04 2002 Numbers are relative to v1.50_BitVect_v1.07,
+				 100 denotes 100%.
+
+	                    |    v1.50
+	                    |  BitVect
+	                    |    v1.08
+	 -------------------+----------
+	  1 * 1             |      105
+	  2 * 2             |      103
+	  12 * 12           |      103
+	  123 * 123         |      101
+	  1234 * 1234       |      104
+	  12345 * 12345     |      103
+	  123456*123456     |      100
+	  1234567*1234567   |      101
+	  12345678*12345678 |      102
+	  12345679*12345679 |      102
+	  12 * 2            |      100
+	  123 * 2           |      104
+	  1234 * 2          |      103
+	  12345 * 2         |      102
+	  123456 * 2        |      102
+	  1234567 * 2       |      103
+	  12345678 * 2      |      103
+	  123456789 * 2     |      102
+	  1e10 * 1e10       |      104
+	  1e100 * 1e100     |      101
+	  1e1000 * 1e1000   |      100
+	  1 * -1            |      102
+	  1e1000 * 1        |      108		<-- !
+	  1e1000 * 10       |      112		<-- !
+	  1e1000 * -10      |      110		<-- !
+	 bmul:              |      103
+	 ...................|.......... 
+
+ * added _fac() for factorial speed improvements
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
