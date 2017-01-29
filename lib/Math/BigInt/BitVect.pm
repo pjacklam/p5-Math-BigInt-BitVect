@@ -12,7 +12,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '1.06';
+$VERSION = '1.08';
 
 use Bit::Vector;
 
@@ -35,18 +35,19 @@ sub _new
   # (string) return ref to num
   my $d = shift;
 
-  my $bits = (10*length($$d) / 3);	# 1000 => 10 bits, 1000000 => 20
-  $bits = (int($bits / $chunk) + 1) * $chunk;
+  my $b = (10*length($$d) / 3);		# 1000 => 10 bits, 1000000 => 20
+  $b = (int($b / $chunk) + 1) * $chunk; # chunked
 
-  my $u = Bit::Vector->new_Dec($bits,$$d);
-  return __reduce($u);
+  my $u = Bit::Vector->new_Dec($b,$$d);
+  __reduce($u) if $b > $bits;
+  $u;
   }                                                                             
 
 sub _from_hex
   {
   my $h = $_[1];
-  $$h =~ s/^[+-]?0x//;
 
+  $$h =~ s/^[+-]?0x//;
   my $bits = length($$h)*4+4;			# 0x1234 => 4*4+4 => 20 bits
   $bits = (int($bits / $chunk) + 1) * $chunk;
   #print "new hex $bits\n";
@@ -61,22 +62,22 @@ sub _from_bin
   my $bits = length($$b)+4;			# 0x1234 => 4*4+4 => 20 bits
   $bits = (int($bits / $chunk) + 1) * $chunk;
   #print "new bin $bits\n";
-  return Bit::Vector->new_Bin($bits,$$b);
+  Bit::Vector->new_Bin($bits,$$b);
   }
 
 sub _zero
   {
-  return Bit::Vector->new_Dec($bits,0);
+  Bit::Vector->new_Dec($bits,0);
   }
 
 sub _one
   {
-  return Bit::Vector->new_Dec($bits,1);
+  Bit::Vector->new_Dec($bits,1);
   }
 
 sub _copy
   {
-  return $_[1]->Clone();
+  $_[1]->Clone();
   }
 
 sub max
@@ -84,7 +85,7 @@ sub max
   # helper function: maximum of 2 values
   my ($m,$n) = @_;
   $m = $n if $n > $m;
-  return $m;
+  $m;
   } 
 
 # catch and throw away
@@ -137,12 +138,11 @@ sub _add
   $ns = (int($ns / $chunk)+1)*$chunk;
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
-
   $x->add($x,$y,0);
   # then reduce again
-  __reduce($y) if $ns != $ys;
   __reduce($x) if $ns != $xs;
-  return $x;
+  __reduce($y) if $ns != $ys;
+  $x;
   }                                                                             
 
 sub _sub
@@ -168,7 +168,7 @@ sub _sub
   __reduce($y) if $ns != $ys;
   __reduce($x) if $ns != $xs;
   return $x unless $z;
-  return $y;
+  $y;
   }                                                                             
 
 sub _mul
@@ -177,9 +177,9 @@ sub _mul
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys)*2 + 2;	# reserve some bits (and +2), so never overflow
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  #print "$xs $ys $ns\n";
+  # reserve some bits (and +2), so we never overflow
+  my $ns = $xs + $ys + 2;		# 2^12 * 2^8 = 2^20 (so we take 22)
+  $ns = (int($ns / $chunk)+1)*$chunk;	# and chunk the size
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
 
@@ -188,7 +188,7 @@ sub _mul
   # then reduce again
   __reduce($y) if $ns != $ys;
   __reduce($x) if $ns != $xs;
-  return $x;
+  $x;
   }                                                                             
 
 sub _div
@@ -211,38 +211,29 @@ sub _div
     __reduce($x) if $ns != $xs;
     return wantarray ? ($x,__reduce($r)) : $x;
     }    
-  else
-    {
-    $r = Bit::Vector->new_Hex($chunk,0);	# x > y => 0
-    return wantarray ? ($r,$x) : $r;		# (0,x) or 0
-    }
+  $r = Bit::Vector->new_Hex($chunk,0);	# x < y => 0
+  return wantarray ? ($r,$x) : $r;	# (0,x) or 0
   }                                                                             
 
 sub _inc
   {
   my ($x) = $_[1];
 
-  # and overflow can only occur if the leftmost bit and the rightmost bit are
-  # both 1 (we don't look at the other bits)
+  # an overflow can only occur if the leftmost bit and the rightmost bit are
+  # both 1 (we don't bother to look at the other bits)
   
   my $xs = $x->Size();
   if ($x->bit_test($xs-1) & $x->bit_test(0))
     {
     $x->Resize($xs + $chunk);	# make one bigger
     $x->increment();
-    __reduce($x);
+    __reduce($x);		# in case no overflow occured
     }
   else
     {
     $x->increment();		# can't overflow, so no resize/reduce necc.
     }
   $x;
-
-  #my $xs = $x->Max()+1; my $ns = $xs+1;
-  #$ns = (int($ns / $chunk)+1)*$chunk;
-  #$x->Resize($ns) if $xs != $ns;
-  #$x->increment();
-  #__reduce($x);
   }
 
 sub _dec
@@ -404,13 +395,13 @@ sub _acmp
   return -1 if $diff < 0;
   return 1 if $diff > 0;
 
-  # used sizes are the same
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
-  return $x->Lexicompare($y);
+  # used sizes are the same, so no need for Resizing/reducing
+#  my $xs = $x->Size(); my $ys = $y->Size();
+#  my $ns = max($xs,$ys);
+#  $ns = (int($ns / $chunk)+1)*$chunk;
+#  $x->Resize($ns) if $xs != $ns;
+#  $y->Resize($ns) if $ys != $ns;
+  $x->Lexicompare($y);
   }
 
 sub _len_bits
@@ -433,6 +424,21 @@ sub _digit
   my ($c,$x,$n) = @_;
 
   $n++; return substr($x->to_Dec(),-$n,1);
+  }
+
+sub _fac
+  {
+  # factorial of $x
+  my ($c,$x) = @_;
+
+  my $n = _copy($c,$x);
+  $x = _one();			# not $one_ since we need a copy/or new object!
+  while (!_is_one($c,$n))
+    {  
+#    print " x ",${_str($c,$x)}," n ",${_str($c,$n)},"\n";
+    _mul($c,$x,$n); _dec($c,$n);
+    }
+  $x; 			# no __reduce() since only getting bigger
   }
 
 sub _pow
@@ -462,6 +468,36 @@ sub _pow
 					# use ref() == ref() to compare addr.
   $x->Power($x,$y);
   __reduce($x) if $xs != $ns;
+  }
+
+###############################################################################
+# shifting
+
+sub _rsft
+  {
+  my ($c,$x,$y,$n) = @_;
+
+  if ($n != 2)
+    {
+    $n = _new($c,\$n); return _div($c,$x, _pow($c,$n,$y));
+    }
+  $x->Move_Right(_num($c,$y));		# must be scalar - ugh
+  __reduce($x);
+  }
+
+sub _lsft
+  {
+  my ($c,$x,$y,$n) = @_;
+
+  if ($n != 2)
+    {
+    $n = _new($c,\$n); return _mul($c,$x, _pow($c,$n,$y));
+    }
+  $y = _num($c,$y);			# need scalar for Resize/Move_Left - ugh
+  my $size = $x->Size() + 1 + $y;	# y and one more
+  $x->Resize($size);
+  $x->Move_Left($y);
+  __reduce($x);				# to minimum size
   }
 
 ##############################################################################
@@ -531,8 +567,8 @@ sub __reduce
     #print "r $real_size $size\n";	
     my $new_size = $size;
     $new_size = (int($real_size / $chunk) + 1) * $chunk;
-    #print "Resize $size => $new_size (by ",
-    # $size-$new_size, " bits or ",int(10000-10000*$new_size/$size)/100,"%)\n";
+#    print "Resize $size => $new_size (by ",
+#     $size-$new_size, " bits or ",int(10000-10000*$new_size/$size)/100,"%)\n";
     $bv->Resize($new_size) if $new_size != $size;
     }
   return $bv;

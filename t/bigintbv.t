@@ -6,9 +6,9 @@ use Test;
 BEGIN 
   {
   $| = 1;
-  # chdir 't' if -d 't';
+  chdir 't' if -d 't';
   unshift @INC, '../lib'; # for running manually
-  plan tests => 60;
+  plan tests => 68;
   }
 
 # testing of Math::BigInt::BitVect, primarily for interface/api and not for the
@@ -83,6 +83,16 @@ $x = $C->_new(\"9"); $y = $C->_new(\"6"); ok (${$C->_str($C->_xor($x,$y))},15);
 $x = $C->_new(\"7"); ok (${$C->_str($C->_inc($x))},8);
 $x = $C->_new(\"7"); ok (${$C->_str($C->_dec($x))},6);
 
+# _lsft, _rsft
+$x = $C->_new(\"7"); $y = $C->_new(\"1");
+ ok (${$C->_str($C->_lsft($x,$y,2))},14);
+$x = $C->_new(\"15"); $y = $C->_new(\"1");
+ ok (${$C->_str($C->_rsft($x,$y,2))},7);
+$x = $C->_new(\"7"); $y = $C->_new(\"1");
+ ok (${$C->_str($C->_lsft($x,$y,10))},70);
+$x = $C->_new(\"723"); $y = $C->_new(\"2");
+ ok (${$C->_str($C->_rsft($x,$y,10))},7);
+
 # check that __reduce really works
 my $v = '1' . '0' x 1000; $x = $C->_new(\$v); 
 $v = '1' . '0' x 999; $y = $C->_new(\$v);
@@ -108,6 +118,12 @@ foreach (qw/
 
 # _num
 $x = $C->_new(\"12345"); $x = $C->_num($x); ok (ref($x)||'',''); ok ($x,12345);
+
+# _fac
+$x = $C->_new(\"1"); $x = $C->_fac($x); ok (${$C->_str($x)},'1');
+$x = $C->_new(\"2"); $x = $C->_fac($x); ok (${$C->_str($x)},'2');
+$x = $C->_new(\"3"); $x = $C->_fac($x); ok (${$C->_str($x)},'6');
+$x = $C->_new(\"4"); $x = $C->_fac($x); ok (${$C->_str($x)},'24');
 
 # _copy
 $x = $C->_new(\"123"); $y = $C->_copy($x); $z = $C->_new(\"321");
