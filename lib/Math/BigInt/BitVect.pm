@@ -23,7 +23,7 @@ use vars qw/ @ISA @EXPORT $VERSION/;
 	_pow _dec _inc _gcd
 	_and _or _xor
 );
-$VERSION = '1.00';
+$VERSION = '1.01';
 
 use Bit::Vector;
 
@@ -32,7 +32,6 @@ use Bit::Vector;
  
 # constants for easier life
 my $nan = 'NaN';
-my $class = 'Math::BigInt::BitVect';
 my $bits 	= 32;				# make new numbers this wide
 my $chunk	= 32;				# keep size a multiple of this
 
@@ -45,24 +44,20 @@ my $one_ = Bit::Vector->new_Dec($bits,1);
 
 sub _new
   {
+  shift;				# remove class name
   # (string) return ref to num
-  shift @_ if $_[0] eq $class;
   my $d = shift;
 
-  #print "new number $$d ";
   my $bits = (10*length($$d) / 3);	# 1000 => 10 bits, 1000000 => 20
   $bits = (int($bits / $chunk) + 1) * $chunk;
-  #print "with $bits bits\n";
  
   my $u = Bit::Vector->new_Dec($bits,$$d);
-  # $u->Absolute($u) if $u->Sign() == -1;	# <0? (should not happen)
-  #print "new: $u\n";
   return __reduce($u);
   }                                                                             
 
 sub _from_hex
   {
-  shift @_ if $_[0] eq $class;
+  shift;				# remove class name
   my $h = shift;
   $$h =~ s/^[+-]?0x//;
 
@@ -74,7 +69,7 @@ sub _from_hex
 
 sub _from_bin
   {
-  shift @_ if $_[0] eq $class;
+  shift;				# remove class name
   my $b = shift;
 
   $$b =~ s/^[+-]?0b//;
@@ -96,7 +91,7 @@ sub _one
 
 sub _copy
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my $x = shift;
   return $x->Clone();
   }
@@ -115,7 +110,7 @@ sub max
 sub _str
   {
   # make string
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my $ar = shift;
 
   my $x = $ar->to_Dec(); 
@@ -126,7 +121,7 @@ sub _str
 sub _num
   {
   # make a number
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my $ar = shift;
   
   # let Perl's atoi() handle this one
@@ -141,7 +136,7 @@ sub _num
 
 sub _add
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # sizes must match!
@@ -161,7 +156,7 @@ sub _add
 sub _sub
   {
   # $x is always larger than $y! So overflow/underflow can not happen here
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y,$z) = @_;
  
   # sizes must match!
@@ -186,7 +181,7 @@ sub _sub
 
 sub _mul
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # sizes must match!
@@ -207,7 +202,7 @@ sub _mul
 
 sub _div
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
   
   my $r;
@@ -235,7 +230,7 @@ sub _div
 
 sub _inc
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = @_;
   my $xs = $x->Max()+1; my $ns = $xs+1;
   $ns = (int($ns / $chunk)+1)*$chunk;
@@ -247,7 +242,7 @@ sub _inc
 sub _dec
   {
   # overflow into negative!
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = @_;
 
   # will only get smaller
@@ -258,7 +253,7 @@ sub _dec
 sub _and
   {
   # bit-wise AND of two numbers
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # sizes must match!
@@ -278,7 +273,7 @@ sub _and
 sub _xor
   {
   # bit-wise XOR of two numbers
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # sizes must match!
@@ -298,7 +293,7 @@ sub _xor
 sub _or
   {
   # bit-wise OR of two numbers
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # sizes must match!
@@ -318,7 +313,7 @@ sub _or
 sub _gcd
   {
   # Greatest Common Divisior
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # test un-resized for zero
@@ -402,7 +397,7 @@ sub _gcd
 
 sub _acmp
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x, $y) = @_;
 
   my $xm = $x->Max(); my $ym = $y->Max();
@@ -421,7 +416,7 @@ sub _acmp
 
 sub _len
   {
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = @_;
   # return length, aka digits in decmial, costly!!
   return length($x->to_Dec());
@@ -429,9 +424,8 @@ sub _len
 
 sub _digit
   {
-  # return the nth digit, negative values count backward
-  # costly!
-  shift @_ if $_[0] eq $class;
+  # return the nth digit, negative values count backward; this is costly!
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$n) = @_;
 
   $n++; return substr($x->to_Dec(),-$n,1);
@@ -440,7 +434,7 @@ sub _digit
 sub _pow
   {
   # return power
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x,$y) = @_;
 
   # new size is appr. exponent-size * powersize
@@ -461,6 +455,7 @@ sub _pow
   $ns = (int($ns / $chunk)+1)*$chunk;
   # print ${_str($x)}, " ", ${_str($y)}," max:$xs val:$ys => $ns\n";
   $x->Resize($ns) if $xs != $ns;
+  $y = $y->Clone() if ($y eq $x);	# BitVect does not like self_pow
   $x->Power($x,$y);
   __reduce($x) if $xs != $ns;
   }
@@ -471,7 +466,7 @@ sub _pow
 sub _is_zero
   {
   # return true if arg is zero
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = shift;
 
   return 0 if $x->Size() != $bits;	# if size mismatch
@@ -481,7 +476,7 @@ sub _is_zero
 sub _is_one
   {
   # return true if arg is one
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = shift;
 
   return 0 if $x->Size() != $bits;	# if size mismatch
@@ -491,7 +486,7 @@ sub _is_one
 sub _is_even
   {
   # return true if arg is even
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = shift;
   return (!$x->bit_test(0))||0;
   }
@@ -499,7 +494,7 @@ sub _is_even
 sub _is_odd
   {
   # return true if arg is odd
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
   my ($x) = shift;
   return $x->bit_test(0) || 0;
   }
@@ -510,7 +505,7 @@ sub _is_odd
 sub _check
   {
   # no checks yet, pull it out from the test suite
-  shift @_ if $_[0] eq $class;
+  shift @_ if $_[0] eq __PACKAGE__;
 
   my ($x) = shift;
   return "$x is not a reference to Bit::Vector" if ref($x) ne 'Bit::Vector';
@@ -564,7 +559,7 @@ the same terms as Perl itself.
 =head1 AUTHOR
 
 Tels http://bloodgate.com in 2001.
-The used module Bit::Vector is by Steffen Beier. Thanx!
+The used module Bit::Vector is by Steffen Beyer. Thanx!
 
 =head1 SEE ALSO
 
