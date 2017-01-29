@@ -12,7 +12,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '1.04';
+$VERSION = '1.05';
 
 use Bit::Vector;
 
