@@ -1,6 +1,10 @@
 
 
-v1.00: First release. 
+2001-07-09 v1.00: Tels
+ * First release. 
+2001-07-13 v1.01: Tels
+ * new testsuite from BigInt v1.37, tweaks to it to silence Exporter
+ * $class => __PACKAGE__
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
