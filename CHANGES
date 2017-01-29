@@ -23,6 +23,7 @@
  * added _lsft() and _rsft() for more speed on shifting
  * tests from MBI v1.50 (3685 vs. 2932 tests)
 2002-02-19 v1.08 Tels
+ * added _fac() for factorial speed improvements
  * streamlined some functions (removed return)
  * _mul() does no longer create a result of max($m,$n)*2, but a $m+$n+2 bits
    Quite some performance gains when $m much is greater/smaller than $n.
@@ -63,7 +64,9 @@
 	 bmul:              |      103
 	 ...................|.......... 
 
- * added _fac() for factorial speed improvements
+2002-02-21 v1.09 Tels
+ * tests from v1.51
+ * replaced _core_lib() by config()->{lib}
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
