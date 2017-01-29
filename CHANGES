@@ -9,7 +9,11 @@
  * fixed 2 ** something to be more efficient
  * made Bit::Vector a requirement
 2001-08-03 v1.03 Tels
- * added tests from Math::BigInt v1.40
+ * added tests from MBI v1.40
+2001-09-03 v1.04 Tels
+ * _as_hex(), _as_bin()
+ * tests from MBI 1.42
+ * removed default exporting, added empty import()
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
