@@ -67,6 +67,8 @@
 2002-02-21 v1.09 Tels
  * tests from v1.51
  * replaced _core_lib() by config()->{lib}
+2002-03-24 v1.10 Tels
+ * tests from v1.55
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
