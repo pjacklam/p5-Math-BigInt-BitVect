@@ -12,7 +12,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '1.10';
+$VERSION = '1.11';
 
 use Bit::Vector;
 
@@ -396,11 +396,6 @@ sub _acmp
   return 1 if $diff > 0;
 
   # used sizes are the same, so no need for Resizing/reducing
-#  my $xs = $x->Size(); my $ys = $y->Size();
-#  my $ns = max($xs,$ys);
-#  $ns = (int($ns / $chunk)+1)*$chunk;
-#  $x->Resize($ns) if $xs != $ns;
-#  $y->Resize($ns) if $ys != $ns;
   $x->Lexicompare($y);
   }
 
@@ -435,7 +430,6 @@ sub _fac
   $x = _one();			# not $one_ since we need a copy/or new object!
   while (!_is_one($c,$n))
     {  
-#    print " x ",${_str($c,$x)}," n ",${_str($c,$n)},"\n";
     _mul($c,$x,$n); _dec($c,$n);
     }
   $x; 			# no __reduce() since only getting bigger
@@ -451,18 +445,16 @@ sub _pow
   if (($xs == 2) && ($x->bit_test(0) == 0))
     {
     # Bit::Vector v6.0 is O(N*N) for 2 ** x :-(
-    # so cheat
+    # so cheat:
     my $ns = $ys+2; 				# one bit more for unsigned
     $ns = (int($ns / $chunk) + 1) * $chunk;	# chunked
     $x->Resize($ns);
-    #$x->Empty();
     $x->Bit_Off(1);				# clear the only bit set 
     $x->Bit_On($ys);				# and set this    
     return $x;					# no __reduce() neccessary
     }
   my $ns = $ys * $xs + 1;
   $ns = (int($ns / $chunk)+1)*$chunk;
-  # print ${_str($x)}, " ", ${_str($y)}," max:$xs val:$ys => $ns\n";
   $x->Resize($ns) if $xs != $ns;
   $y = $y->Clone() if ($y == $x);	# BitVect does not like self_pow
 					# use ref() == ref() to compare addr.
@@ -551,7 +543,6 @@ sub __reduce
   # internal reduction to make minimum size
   my ($bv) = @_;
 
-  # print "reduce: ",$bv->Size()," max: ",$bv->Max(),"\n";
   my $size = $bv->Size();
   return $bv if $size <= $chunk;			# not smaller
 
@@ -564,11 +555,8 @@ sub __reduce
   # need to make smaller? (real_size =-inf if $bv == 0!)
   elsif (($size - $real_size) > $chunk)
     {
-    #print "r $real_size $size\n";	
     my $new_size = $size;
     $new_size = (int($real_size / $chunk) + 1) * $chunk;
-#    print "Resize $size => $new_size (by ",
-#     $size-$new_size, " bits or ",int(10000-10000*$new_size/$size)/100,"%)\n";
     $bv->Resize($new_size) if $new_size != $size;
     }
   return $bv;
