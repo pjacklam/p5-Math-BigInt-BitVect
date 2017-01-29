@@ -14,8 +14,11 @@
  * _as_hex(), _as_bin()
  * tests from MBI 1.42
  * removed default exporting, added empty import()
-2001-01-01 v1.05 Tels
+2001-11-01 v1.05 Tels
  * testsuite from BigInt v1.45
+2001-11-11 v1.06 Tels
+ * made _inc/_dec faster and added tests for them
+ * fixed bug in __reduce() that made it never  work (oups, forgot debug again)
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
