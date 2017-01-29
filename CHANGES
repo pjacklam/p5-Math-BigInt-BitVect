@@ -65,10 +65,12 @@
 	 ...................|.......... 
 
 2002-02-21 v1.09 Tels
- * tests from v1.51
+ * tests from BigInt v1.51
  * replaced _core_lib() by config()->{lib}
 2002-03-24 v1.10 Tels
- * tests from v1.55
+ * tests from BigInt v1.55 - 3877 tests
+2002-03-24 v1.11 Tels
+ * tests from BigInt v1.60 - 4057 tests
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!
