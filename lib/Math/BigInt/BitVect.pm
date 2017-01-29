@@ -1,542 +1,700 @@
-###############################################################################
-# core math lib for BigInt, representing big numbers by Bit::Vector's
-
 package Math::BigInt::BitVect;
 
-use 5.005;
+use 5.006;
 use strict;
-# use warnings; # dont use warnings for older Perls
+use warnings;
 
-require Exporter;
+use Math::BigInt::Lib 1.999801;
 
-use vars qw/@ISA $VERSION/;
-@ISA = qw(Exporter);
+our @ISA = qw< Math::BigInt::Lib >;
 
-$VERSION = '1.12';
+our $VERSION = '1.13';
 
+use Carp;
 use Bit::Vector;
 
 ##############################################################################
 # global constants, flags and accessory
- 
-my $bits 	= 32;				# make new numbers this wide
-my $chunk	= 32;				# keep size a multiple of this
+
+my $bits  = 32;                 # make new numbers this wide
+my $chunk = 32;                 # keep size a multiple of this
 
 # for is_* functions
-my $zero_ = Bit::Vector->new_Dec($bits,0);
-my $one_  = Bit::Vector->new_Dec($bits,1);
+my $zero = Bit::Vector->new_Dec($bits, 0);
+my $one  = Bit::Vector->new_Dec($bits, 1);
+my $two  = Bit::Vector->new_Dec($bits, 2);
+my $ten  = Bit::Vector->new_Dec($bits, 10);
+
+sub api_version { 2; }
+
+sub import { }
+
+sub __dump {
+    my ($class, $x) = @_;
+    my $str = $class -> _as_bin($x);
+
+    # number of bits allocated
+
+    my $nbits_alloc = $x -> Size();
+    my $imax        = $x -> Max();
+
+    # minimum number of bits needed
+
+    my $nbits_min = $imax < 0 ? 1 : $imax + 2;
+
+    # expected number of bits
+
+    my $nbits_exp = $chunk * __ceil($nbits_min / $chunk);
+
+    return "$str ($nbits_min/$nbits_exp/$nbits_alloc)";
+}
 
 ##############################################################################
 # create objects from various representations
 
-sub _new
-  {
-  shift;				# remove class name
-  # (string) return ref to num
-  my $d = shift;
+sub _new {
+    my ($class, $str) = @_;
 
-  my $b = (10*length($$d) / 3);		# 1000 => 10 bits, 1000000 => 20
-  $b = (int($b / $chunk) + 1) * $chunk; # chunked
+    # $nbin is the maximum number of bits required to represent any $ndec digit
+    # number in base two. log(10)/log(2) = 3.32192809488736
 
-  my $u = Bit::Vector->new_Dec($b,$$d);
-  __reduce($u) if $b > $bits;
-  $u;
-  }                                                                             
+    my $ndec = length($str);
+    my $nbin = 1 + __ceil(3.32192809488736 * $ndec);
 
-sub _from_hex
-  {
-  my $h = $_[1];
+    $nbin = $chunk * __ceil($nbin / $chunk); # chunked
 
-  $$h =~ s/^[+-]?0x//;
-  my $bits = length($$h)*4+4;			# 0x1234 => 4*4+4 => 20 bits
-  $bits = (int($bits / $chunk) + 1) * $chunk;
-  Bit::Vector->new_Hex($bits,$$h);
-  }
+    my $u = Bit::Vector->new_Dec($nbin, $str);
+    $class->__reduce($u) if $nbin > $bits;
+    $u;
+}
 
-sub _from_bin
-  {
-  my $b = $_[1];
+sub _from_hex {
+    my ($class, $str) = @_;
 
-  $$b =~ s/^[+-]?0b//;
-  my $bits = length($$b)+4;			# 0x1234 => 4*4+4 => 20 bits
-  $bits = (int($bits / $chunk) + 1) * $chunk;
-  Bit::Vector->new_Bin($bits,$$b);
-  }
+    $str =~ s/^0[xX]//;
+    my $bits = 1 + 4 * length($str);
+    $bits = $chunk * __ceil($bits / $chunk);
+    my $x = Bit::Vector->new_Hex($bits, $str);
+    $class->__reduce($x);
+}
 
-sub _zero
-  {
-  Bit::Vector->new_Dec($bits,0);
-  }
+sub _from_bin {
+    my $str = $_[1];
 
-sub _one
-  {
-  Bit::Vector->new_Dec($bits,1);
-  }
+    $str =~ s/^0[bB]//;
+    my $bits = 1 + length($str);
+    $bits = $chunk * __ceil($bits / $chunk);
+    Bit::Vector->new_Bin($bits, $str);
+}
 
-sub _copy
-  {
-  $_[1]->Clone();
-  }
+sub _zero {
+    Bit::Vector->new_Dec($bits, 0);
+}
 
-sub max
-  {
-  # helper function: maximum of 2 values
-  my ($m,$n) = @_;
-  $m = $n if $n > $m;
-  $m;
-  } 
+sub _one {
+    Bit::Vector->new_Dec($bits, 1);
+}
 
-# catch and throw away
-sub import { }
+sub _two {
+    Bit::Vector->new_Dec($bits, 2);
+}
+
+sub _ten {
+    Bit::Vector->new_Dec($bits, 10);
+}
+
+sub _copy {
+    $_[1]->Clone();
+}
 
 ##############################################################################
 # convert back to string and number
 
-sub _str
-  {
-  # make string
-  my $x = $_[1]->to_Dec(); 
-  \$x;
-  }                                                                             
+sub _str {
+    # make string
+    my $x = $_[1]->to_Dec();
+    $x;
+}
 
-sub _num
-  {
-  # make a number
-  # let Perl's atoi() handle this one
-  $_[1]->to_Dec();
-  }
+sub _num {
+    # make a number
+    0 + $_[1]->to_Dec();
+}
 
-sub _as_hex
-  {
-  my $x = $_[1]->to_Hex();
-  $x =~ s/^[0]+(\d)/0x$1/;
-  \$x;
-  }
+sub _as_hex {
+    my $x = lc $_[1]->to_Hex();
+    $x =~ s/^0*([\da-f])/0x$1/;
+    $x;
+}
 
-sub _as_bin
-  {
-  my $x = $_[1]->to_Bin();
-  $x =~ s/^[0]+(\d)/0b$1/;
-  \$x;
-  }
+sub _as_bin {
+    my $x = $_[1]->to_Bin();
+    $x =~ s/^0*(\d)/0b$1/;
+    $x;
+}
 
 ##############################################################################
 # actual math code
 
-sub _add
-  {
-  my ($c,$x,$y) = @_;
+sub _add {
+    my ($class, $x, $y) = @_;
 
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys) + 2;	# reserve 2 bit, so never overflow
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
-  $x->add($x,$y,0);
-  # then reduce again
-  __reduce($x) if $ns != $xs;
-  __reduce($y) if $ns != $ys;
-  $x;
-  }                                                                             
-
-sub _sub
-  {
-  # $x is always larger than $y! So overflow/underflow can not happen here
-  my ($c,$x,$y,$z) = @_;
- 
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);	# no reserve, since no overflow
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
-  if ($z)
-    {
-    $y->sub($x,$y,0);
-    }
-  else
-    {
-    $x->sub($x,$y,0);
-    }
-  # then reduce again
-  __reduce($y) if $ns != $ys;
-  __reduce($x) if $ns != $xs;
-  return $x unless $z;
-  $y;
-  }                                                                             
-
-sub _mul
-  {
-  my ($c,$x,$y) = @_;
-
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  # reserve some bits (and +2), so we never overflow
-  my $ns = $xs + $ys + 2;		# 2^12 * 2^8 = 2^20 (so we take 22)
-  $ns = (int($ns / $chunk)+1)*$chunk;	# and chunk the size
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
-
-  # then mul
-  $x->Multiply($x,$y);
-  # then reduce again
-  __reduce($y) if $ns != $ys;
-  __reduce($x) if $ns != $xs;
-  $x;
-  }                                                                             
-
-sub _div
-  {
-  my ($c,$x,$y) = @_;
-  
-  my $r;
-  # sizes must match!
-  my $xs = $x->Max()+1; my $ys = $y->Max()+1;
-  if ($xs >= $ys)
-    {
-    # actually, if $ys > $xs, result will be zero, anyway...
-    my $ns = $xs+2;			# for overflow, relly necc.?
-    $ns = (int($ns / $chunk)+1)*$chunk;
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys) + 2;         # 2 extra bits, to avoid overflow
+    $ns = $chunk * __ceil($ns / $chunk);
     $x->Resize($ns) if $xs != $ns;
     $y->Resize($ns) if $ys != $ns;
-    $r = Bit::Vector->new_Hex($ns,0);
-    $x->Divide($x,$y,$r);
-    __reduce($y) if $ns != $ys;
-    __reduce($x) if $ns != $xs;
-    return wantarray ? ($x,__reduce($r)) : $x;
-    }    
-  $r = Bit::Vector->new_Hex($chunk,0);	# x < y => 0
-  return wantarray ? ($r,$x) : $r;	# (0,x) or 0
-  }                                                                             
+    $x->add($x, $y, 0);
 
-sub _inc
-  {
-  my ($x) = $_[1];
+    # then reduce again
+    $class->__reduce($x) if $ns != $xs;
+    $class->__reduce($y) if $ns != $ys;
 
-  # an overflow can only occur if the leftmost bit and the rightmost bit are
-  # both 1 (we don't bother to look at the other bits)
-  
-  my $xs = $x->Size();
-  if ($x->bit_test($xs-1) & $x->bit_test(0))
-    {
-    $x->Resize($xs + $chunk);	# make one bigger
-    $x->increment();
-    __reduce($x);		# in case no overflow occured
+    $x;
+}
+
+sub _sub {
+    # $x is always larger than $y! So overflow/underflow can not happen here
+    my ($class, $x, $y, $z) = @_;
+
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys);     # no reserve, since no overflow
+    $ns = $chunk * __ceil($ns / $chunk);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
+
+    if ($z) {
+        $y->subtract($x, $y, 0);
+        $class->__reduce($y);
+        $class->__reduce($x) if $ns != $xs;
+    } else {
+        $x->subtract($x, $y, 0);
+        $class->__reduce($y) if $ns != $ys;
+        $class->__reduce($x);
     }
-  else
-    {
-    $x->increment();		# can't overflow, so no resize/reduce necc.
+
+    return $x unless $z;
+    $y;
+}
+
+sub _mul {
+    my ($class, $x, $y) = @_;
+
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    # reserve some bits (and +2), so we never overflow
+    my $ns = $xs + $ys + 2;     # 2^12 * 2^8 = 2^20 (so we take 22)
+    $ns = $chunk * __ceil($ns / $chunk);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
+
+    # then mul
+    $x->Multiply($x, $y);
+    # then reduce again
+    $class->__reduce($y) if $ns != $ys;
+    $class->__reduce($x) if $ns != $xs;
+    $x;
+}
+
+sub _div {
+    my ($class, $x, $y) = @_;
+
+    # sizes must match!
+
+    my $xs = $x->Max();
+    my $ys = $y->Max();
+
+    # if $ys > $xs, quotient is zero
+
+    if ($xs < 0 || $xs < $ys) {
+        my $r = $x->Clone();
+        $x = Bit::Vector->new_Hex($chunk, 0);
+        return wantarray ? ($x, $r) : $x;
+    } else {
+        my $ns = $x->Size();    # common size
+        my $ys = $y->Size();
+        $y->Resize($ns) if $ys < $ns;
+        my $r = Bit::Vector->new_Hex($ns, 0);
+        $x->Divide($x, $y, $r);
+        $class->__reduce($y) if $ys < $ns;
+        $class->__reduce($x);
+        return wantarray ? ($x, $class->__reduce($r)) : $x;
     }
-  $x;
-  }
+}
 
-sub _dec
-  {
-  # input is >= 1
-  my ($x) = $_[1];
+sub _inc {
+    my ($class, $x) = @_;
 
-  $x->decrement(); 	# will only get smaller, so reduce afterwards
-  __reduce($x);
-  }
+    # an overflow can occur if the leftmost bit and the rightmost bit are
+    # both 1 (we don't bother to look at the other bits)
 
-sub _and
-  {
-  # bit-wise AND of two numbers
-  my ($c,$x,$y) = @_;
+    my $xs = $x->Size();
+    if ($x->bit_test($xs-2) & $x->bit_test(0)) {
+        $x->Resize($xs + $chunk); # make one bigger
+        $x->increment();
+        $class->__reduce($x);           # in case no overflow occured
+    } else {
+        $x->increment();        # can't overflow, so no resize/reduce necc.
+    }
+    $x;
+}
 
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
- 
-  $x->And($x,$y); 
-  __reduce($y) if $ns != $xs;
-  __reduce($x) if $ns != $xs;
-  $x;
-  }
+sub _dec {
+    # input is >= 1
+    my ($class, $x) = @_;
 
-sub _xor
-  {
-  # bit-wise XOR of two numbers
-  my ($c,$x,$y) = @_;
+    $x->decrement();            # will only get smaller, so reduce afterwards
+    $class->__reduce($x);
+}
 
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
- 
-  $x->Xor($x,$y); 
-  __reduce($y) if $ns != $xs;
-  __reduce($x) if $ns != $xs;
-  $x;
-  }
+sub _and {
+    # bit-wise AND of two numbers
+    my ($class, $x, $y) = @_;
 
-sub _or
-  {
-  # bit-wise OR of two numbers
-  my ($c,$x,$y) = @_;
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys);     # highest bits in $x, $y are zero
+    $ns = $chunk * __ceil($ns / $chunk);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
 
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
- 
-  $x->Or($x,$y); 
-  __reduce($y) if $ns != $xs;
-  __reduce($x) if $ns != $xs;
-  $x;
-  }
+    $x->And($x, $y);
+    $class->__reduce($y) if $ns != $xs;
+    $class->__reduce($x);
+    $x;
+}
 
-sub _gcd
-  {
-  # Greatest Common Divisior
-  my ($c,$x,$y) = @_;
+sub _xor {
+    # bit-wise XOR of two numbers
+    my ($class, $x, $y) = @_;
 
-  # Original, Bit::Vectors Euklid algorithmn
-  # sizes must match!
-  my $xs = $x->Size(); my $ys = $y->Size();
-  my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y->Resize($ns) if $ys != $ns;
-  $x->GCD($x,$y);
-   __reduce($y) if $ns != $ys;
-   __reduce($x) if $ns != $xs;
-  $x;
-  }
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys);     # highest bits in $x, $y are zero
+    $ns = $chunk * __ceil($ns / $chunk);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
+
+    $x->Xor($x, $y);
+    $class->__reduce($y) if $ns != $xs;
+    $class->__reduce($x);
+    $x;
+}
+
+sub _or {
+    # bit-wise OR of two numbers
+    my ($class, $x, $y) = @_;
+
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys);     # highest bits in $x, $y are zero
+    $ns = $chunk * __ceil($ns / $chunk);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
+
+    $x->Or($x, $y);
+    $class->__reduce($y) if $ns != $xs;
+    $class->__reduce($x) if $ns != $xs;
+    $x;
+}
+
+sub _gcd {
+    # Greatest Common Divisor
+    my ($class, $x, $y) = @_;
+
+    # Original, Bit::Vectors Euklid algorithmn
+    # sizes must match!
+    my $xs = $x->Size();
+    my $ys = $y->Size();
+    my $ns = __max($xs, $ys);
+    $x->Resize($ns) if $xs != $ns;
+    $y->Resize($ns) if $ys != $ns;
+    $x->GCD($x, $y);
+    $class->__reduce($y) if $ys != $ns;
+    $class->__reduce($x);
+    $x;
+}
 
 ##############################################################################
 # testing
 
-sub _acmp
-  {
-  my ($c,$x, $y) = @_;
+sub _acmp {
+    my ($class, $x, $y) = @_;
 
-  my $xm = $x->Size(); my $ym = $y->Size();
-  my $diff = ($xm - $ym);
+    my $xm = $x->Size();
+    my $ym = $y->Size();
+    my $diff = ($xm - $ym);
 
-  return $diff <=> 0 if $diff != 0;
+    return $diff <=> 0 if $diff != 0;
 
-  # used sizes are the same, so no need for Resizing/reducing
-  $x->Lexicompare($y);
-  }
+    # used sizes are the same, so no need for Resizing/reducing
+    $x->Lexicompare($y);
+}
 
-sub _len_bits
-  {
-  # should find out if it returns the length-1 (f.i between 32 and 99 it will
-  # be off by -1, meaning that between 32 and 128 it should use _len, otherwise
-  # it can return the shortcut)
-  int($_[1]->Max() * 0.3 * 1.004 + 0.5)+1;
-  }
+sub _len {
+    # return length, aka digits in decmial, costly!!
+    length($_[1]->to_Dec());
+}
 
-sub _len
-  {
-  # return length, aka digits in decmial, costly!!
-  length($_[1]->to_Dec());
-  }
+sub _alen {
+    my $nb = $_[1] -> Max();    # index (zero-based)
+    return 1 if $nb < 0;        # $nb is negative if $_[1] is zero
+    int(0.5 + 3.32192809488736 * ($nb + 1));
+}
 
-sub _digit
-  {
-  # return the nth digit, negative values count backward; this is costly!
-  my ($c,$x,$n) = @_;
+sub _digit {
+    # return the nth digit, negative values count backward; this is costly!
+    my ($class, $x, $n) = @_;
 
-  substr($x->to_Dec(),-($n+1),1);
-  }
+    substr($x->to_Dec(), -($n+1), 1);
+}
 
-sub _fac
-  {
-  # factorial of $x
-  my ($c,$x) = @_;
+sub _fac {
+    # factorial of $x
+    my ($class, $x) = @_;
 
-  if (_is_zero($c,$x))
-    {
-    $x = _one();		# not $one_ since we need a copy/or new object!
-    return $x;
+    if ($class->_is_zero($x)) {
+        $x = $class->_one();        # not $one since we need a copy/or new object!
+        return $x;
     }
-  my $n = _copy($c,$x);
-  $x = _one();			# not $one_ since we need a copy/or new object!
-  while (!_is_one($c,$n))
-    {  
-    _mul($c,$x,$n); _dec($c,$n);
+    my $n = $class->_copy($x);
+    $x = $class->_one();            # not $one since we need a copy/or new object!
+    while (!$class->_is_one($n)) {
+        $class->_mul($x, $n);
+        $class->_dec($n);
     }
-  $x; 			# no __reduce() since only getting bigger
-  }
+    $x;                         # no __reduce() since only getting bigger
+}
 
-sub _pow
-  {
-  # return power
-  my ($c,$x,$y) = @_;
+sub _pow {
+    # return power
+    my ($class, $x, $y) = @_;
 
-  if (_is_zero($c,$x))
-    {
-    $x = _zero();				# 0 ** Y => 0
-    $x = _one() if _is_zero($c,$y);		# 0 ** 0 => 1
-    return $x;
-    }
+    # x**0 = 1
 
-  # new size is appr. exponent-size * powersize
-  my $xs = $x->Max()+1; my $ys = $y->to_Dec();
-  if (($xs == 2) && ($x->bit_test(0) == 0))
-    {
-    # Bit::Vector v6.0 is O(N*N) for 2 ** x :-(
-    # so cheat:
-    my $ns = $ys+2; 				# one bit more for unsigned
-    $ns = (int($ns / $chunk) + 1) * $chunk;	# chunked
-    $x->Resize($ns);
-    $x->Bit_Off(1);				# clear the only bit set 
-    $x->Bit_On($ys);				# and set this    
-    return $x;					# no __reduce() neccessary
-    }
-  my $ns = $ys * $xs + 1;
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $y = $y->Clone() if ($y == $x);	# BitVect does not like self_pow
-					# use ref() == ref() to compare addr.
-  $x->Power($x,$y);
-  __reduce($x) if $xs != $ns;
-  }
+    return $class -> _one() if $class -> _is_zero($y);
+
+    # 0**y = 0 if $y != 0 (y = 0 is taken care of above).
+
+    return $class -> _zero() if $class -> _is_zero($x);
+
+    my $ns = 1 + ($x -> Max() + 1) * $y -> to_Dec();
+    $ns = $chunk * __ceil($ns / $chunk);
+
+    my $z = Bit::Vector -> new($ns);
+
+    $z -> Power($x, $y);
+    return $class->__reduce($z);
+}
 
 ###############################################################################
 # shifting
 
-sub _rsft
-  {
-  my ($c,$x,$y,$n) = @_;
+sub _rsft {
+    my ($class, $x, $n, $b) = @_;
 
-  if ($n != 2)
-    {
-    $n = _new($c,\$n); return _div($c,$x, _pow($c,$n,$y));
+    if ($b == 2) {
+        $x->Move_Right($class->_num($n)); # must be scalar - ugh
+    } else {
+        $b = $class->_new($b) unless ref($b);
+        $x = $class->_div($x, $class->_pow($b, $n));
     }
-  $x->Move_Right(_num($c,$y));		# must be scalar - ugh
-  __reduce($x);
-  }
+    $class->__reduce($x);
+}
 
-sub _lsft
-  {
-  my ($c,$x,$y,$n) = @_;
+sub _lsft {
+    my ($class, $x, $n, $b) = @_;
 
-  if ($n != 2)
-    {
-    $n = _new($c,\$n); return _mul($c,$x, _pow($c,$n,$y));
+    if ($b == 2) {
+        $n = $class->_num($n);              # need scalar for Resize/Move_Left - ugh
+        my $size = $x->Size() + 1 + $n; # y and one more
+        my $ns = (int($size / $chunk)+1)*$chunk;
+        $x->Resize($ns);
+        $x->Move_Left($n);
+        $class->__reduce($x);               # to minimum size
+    } else {
+        $b = $class->_new($b);
+        $class->_mul($x, $class->_pow($b, $n));
     }
-  $y = _num($c,$y);			# need scalar for Resize/Move_Left - ugh
-  my $size = $x->Size() + 1 + $y;	# y and one more
-  my $ns = (int($size / $chunk)+1)*$chunk;
-  $x->Resize($ns);
-  $x->Move_Left($y);
-  __reduce($x);				# to minimum size
-  }
+    return $x;
+}
 
 ##############################################################################
 # _is_* routines
 
-sub _is_zero
-  {
-  # return true if arg is zero
-  my ($x) = $_[1];
+sub _is_zero {
+    # return true if arg is zero
+    my $x = $_[1];
 
-  return 0 if $x->Size() != $bits;	# if size mismatch
-  $x->equal($zero_);
-  }
+    return $x -> is_empty() ? 1 : 0;
+}
 
-sub _is_one
-  {
-  # return true if arg is one
-  my ($x) = $_[1];
+sub _is_one {
+    # return true if arg is one
+    my $x = $_[1];
 
-  return 0 if $x->Size() != $bits;	# if size mismatch
-  $x->equal($one_);
-  }
+    return 0 if $x->Size() != $bits; # if size mismatch
+    $x->equal($one);
+}
 
-sub _is_even
-  {
-  # return true if arg is even
-  my ($x) = $_[1];
-  
-  (!$x->bit_test(0)) || 0;
-  }
+sub _is_two {
+    # return true if arg is two
+    my $x = $_[1];
 
-sub _is_odd
-  {
-  # return true if arg is odd
-  my ($x) = $_[1];
-  
-  $x->bit_test(0) || 0;
-  }
+    return 0 if $x->Size() != $bits; # if size mismatch
+    $x->equal($two);
+}
+
+sub _is_ten {
+    # return true if arg is ten
+    my $x = $_[1];
+
+    return 0 if $x->Size() != $bits; # if size mismatch
+    $_[1]->equal($ten);
+}
+
+sub _is_even {
+    # return true if arg is even
+
+    $_[1]->bit_test(0) ? 0 : 1;
+}
+
+sub _is_odd {
+    # return true if arg is odd
+
+    $_[1]->bit_test(0) ? 1 : 0;
+}
 
 ###############################################################################
 # check routine to test internal state of corruptions
 
-sub _check
-  {
-  # no checks yet, pull it out from the test suite
-  my ($x) = $_[1];
-  return "$x is not a reference to Bit::Vector" if ref($x) ne 'Bit::Vector';
-  my $ns = (int($x->Size() / $chunk))*$chunk;
-  if ($x->Size() != $ns)
-    {
-    return "Size($x) is " . $x->Size() . ", expected $ns.";
-    }
-  0;
-  }
+sub _check {
+    # no checks yet, pull it out from the test suite
+    my $x = $_[1];
+    return "Undefined" unless defined $x;
+    return "$x is not a reference to Bit::Vector" if ref($x) ne 'Bit::Vector';
 
-sub __reduce
-  { 
-  # internal reduction to make minimum size
-  my ($bv) = @_;
+    return "$x is negative" if $x->Sign() < 0;
 
-  my $size = $bv->Size();
-  return $bv if $size <= $chunk;			# not smaller
+    # Get the size.
 
-  # one more to prevent negatives
-  my $real_size = $bv->Max()+1;
-  if ($real_size < 0)
-    {
-    $bv->Resize($chunk);	# is bigger than chunk
+    my $xs = $x -> Size();
+
+    # The size must be a multiple of the chunk size.
+
+    my $ns = $chunk * int($xs / $chunk);
+    if ($xs != $ns) {
+        return "Size($x) is $x bits, expected a multiple of $chunk.";
     }
-  # need to make smaller? (real_size =-inf if $bv == 0!)
-  elsif (($size - $real_size) > $chunk)
-    {
-    my $new_size = (int($real_size / $chunk) + 1) * $chunk;
-    $bv->Resize($new_size) if $new_size != $size;
+
+    # The size must not be larger than necessary.
+
+    my $imax = $x -> Max();                 # index of highest non-zero bit
+    my $nmin = $imax < 0 ? 1 : $imax + 2;   # minimum number of bits required
+    $ns = $chunk * __ceil($nmin / $chunk);    # minimum size in whole chunks
+    if ($xs != $ns) {
+        return "Size($x) is $xs bits, but only $ns bits are needed.";
     }
-  $bv;
-  }
+
+    0;
+}
+
+sub _mod {
+    my ($class, $x, $y) = @_;
+
+    # Get current sizes.
+
+    my $xs = $x -> Size();
+    my $ys = $y -> Size();
+
+    # Resize to a common size.
+
+    my $ns = __max($xs, $ys);
+    $x -> Resize($ns) if $xs < $ns;
+    $y -> Resize($ns) if $ys < $ns;
+    my $quo = Bit::Vector -> new($ns);
+    my $rem = Bit::Vector -> new($ns);
+
+    # Get the quotient.
+
+    $quo -> Divide($x, $y, $rem);
+
+    # Resize $y back to its original size, if necessary.
+
+    $y -> Resize($ys) if $ys < $ns;
+
+    $class -> __reduce($rem);
+}
+
+# The following methods are not implemented (yet):
+
+#sub _1ex { }
+
+#sub _as_bytes { }
+
+#sub _as_oct { }
+
+#sub _from_bytes { }
+
+#sub _from_oct { }
+
+#sub _lcm { }
+
+#sub _log_int { }
+
+#sub _modinv { }
+
+#sub _modpow { }
+
+#sub _nok { }
+
+#sub _root { }
+
+#sub _sqrt { }
+
+#sub _zeros { }
+
+sub __reduce {
+    # internal reduction to make minimum size
+    my ($class, $x) = @_;
+
+    my $bits_allocated = $x->Size();
+    return $x if $bits_allocated <= $chunk;
+
+    # The number of bits we use is always a positive multiple of $chunk. Add
+    # two extra bits to $imax; one because $imax is zero-based, and one to
+    # avoid that the highest bit is one, which signifies a negative number.
+
+    my $imax = $x->Max();
+    my $bits_needed = $imax < 0 ? 1 : 2 + $imax;
+    $bits_needed = $chunk * __ceil($bits_needed / $chunk);
+
+    if ($bits_allocated > $bits_needed) {
+        $x->Resize($bits_needed);
+    }
+
+    $x;
+}
+
+###############################################################################
+# helper/utility functions
+
+# maximum of 2 values
+
+sub __max {
+    my ($m, $n) = @_;
+    $m > $n ? $m : $n;
+}
+
+# ceiling function
+
+sub __ceil {
+    my $x  = shift;
+    my $ix = int $x;
+    ($ix >= $x) ? $ix : $ix + 1;
+}
 
 1;
+
 __END__
+
+=pod
 
 =head1 NAME
 
-Math::BigInt::BitVect - Use Bit::Vector for Math::BigInt routines
+Math::BigInt::BitVect - a math backend library based on Bit::Vector
 
 =head1 SYNOPSIS
 
-Provides support for big integer calculations via means of Bit::Vector, a
-fast C library by Steffen Beier.
+    # to use it with Math::BigInt
+    use Math::BigInt lib => 'BitVect';
 
-See the section PERFORMANCE in L<Math::BigInt> for when to use this module and
-when not.
+    # to use it with Math::BigFloat
+    use Math::BigFloat lib => 'BitVect';
 
-=head1 LICENSE
- 
-This program is free software; you may redistribute it and/or modify it under
-the same terms as Perl itself. 
+    # to use it with Math::BigRat
+    use Math::BigRat lib => 'BitVect';
 
-=head1 AUTHOR
+=head2 DESCRIPTION
 
-(c) 2001, 2002, 2003, 2004 by Tels http://bloodgate.com 
-The module Bit::Vector is (c) by Steffen Beyer. Thanx!
+Provides support for big integer calculations via Bit::Vector, a fast C library
+by Steffen Beier.
+
+=head1 BUGS
+
+Please report any bugs or feature requests to
+C<bug-math-bigint-parts at rt.cpan.org>, or through the web interface at
+
+  L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Math-BigInt-BitVect>
+
+I will be notified, and then you'll automatically be notified of progress on
+your bug as I make changes.
+
+=head1 SUPPORT
+
+You can find documentation for this module with the perldoc command.
+
+  perldoc Math::BigInt::BitVect
+
+You can also look for information at:
+
+=over 4
+
+=item * RT: CPAN's request tracker
+
+L<http://rt.cpan.org/Public/Dist/Display.html?Name=Math-BigInt-BitVect>
+
+=item * CPAN Ratings
+
+L<http://cpanratings.perl.org/dist/Math-BigInt-BitVect>
+
+=item * Search CPAN
+
+L<http://search.cpan.org/dist/Math-BigInt-BitVect>
+
+=item * CPAN Testers PASS Matrix
+
+L<http://pass.cpantesters.org/distro/M/Math-BigInt-BitVect.html>
+
+=item * CPAN Testers Reports
+
+L<http://www.cpantesters.org/distro/M/Math-BigInt-BitVect.html>
+
+=item * CPAN Testers Matrix
+
+L<http://matrix.cpantesters.org/?dist=Math-BigInt-BitVect>
+
+=back
 
 =head1 SEE ALSO
 
-L<Math::BigInt>, L<Math::BigInt::Calc>, L<Math::BigInt::GMP>, L<Bit::Vector>.
+L<Math::BigInt::Lib> for a description of the API.
+
+Alternative backend libraries L<Math::BigInt::Calc>, L<Math::BigInt::FastCalc>,
+L<Math::BigInt::GMP>, and L<Math::BigInt::Pari>.
+
+The modules that use these libraries L<Math::BigInt>, L<Math::BigFloat>, and
+L<Math::BigRat>.
+
+=head1 AUTHOR
+
+(c) 2001, 2002, 2003, 2004 by Tels http://bloodgate.com
+
+Peter John Acklam E<lt>pjacklam@gmail.comE<gt>, 2016
+
+The module Bit::Vector is (c) by Steffen Beyer. Thanx!
+
+=head1 LICENSE
+
+This program is free software; you may redistribute it and/or modify it under
+the same terms as Perl itself.
 
 =cut
