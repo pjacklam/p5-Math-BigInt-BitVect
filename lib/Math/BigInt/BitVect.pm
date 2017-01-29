@@ -5,7 +5,7 @@ package Math::BigInt::BitVect;
 
 use 5.005;
 use strict;
-use warnings;
+# use warnings; # dont use warnings for older Perls
 
 require Exporter;
 
@@ -23,21 +23,19 @@ use vars qw/ @ISA @EXPORT $VERSION/;
 	_pow _dec _inc _gcd
 	_and _or _xor
 );
-$VERSION = '1.01';
+$VERSION = '1.03';
 
 use Bit::Vector;
 
 ##############################################################################
 # global constants, flags and accessory
  
-# constants for easier life
-my $nan = 'NaN';
 my $bits 	= 32;				# make new numbers this wide
 my $chunk	= 32;				# keep size a multiple of this
 
 # for is_* functions
 my $zero_ = Bit::Vector->new_Dec($bits,0);
-my $one_ = Bit::Vector->new_Dec($bits,1);
+my $one_  = Bit::Vector->new_Dec($bits,1);
 
 ##############################################################################
 # create objects from various representations
@@ -57,8 +55,7 @@ sub _new
 
 sub _from_hex
   {
-  shift;				# remove class name
-  my $h = shift;
+  my $h = $_[1];
   $$h =~ s/^[+-]?0x//;
 
   my $bits = length($$h)*4+4;			# 0x1234 => 4*4+4 => 20 bits
@@ -69,8 +66,7 @@ sub _from_hex
 
 sub _from_bin
   {
-  shift;				# remove class name
-  my $b = shift;
+  my $b = $_[1];
 
   $$b =~ s/^[+-]?0b//;
   my $bits = length($$b)+4;			# 0x1234 => 4*4+4 => 20 bits
@@ -91,14 +87,12 @@ sub _one
 
 sub _copy
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my $x = shift;
-  return $x->Clone();
+  return $_[1]->Clone();
   }
 
 sub max
   {
-  # maximum from 2 values
+  # helper function: maximum of 2 values
   my ($m,$n) = @_;
   $m = $n if $n > $m;
   return $m;
@@ -110,23 +104,15 @@ sub max
 sub _str
   {
   # make string
-  shift @_ if $_[0] eq __PACKAGE__;
-  my $ar = shift;
-
-  my $x = $ar->to_Dec(); 
-#  warn ("$x is negative!") if $x =~ /^[-]/;	# spurious '-'
+  my $x = $_[1]->to_Dec(); 
   return \$x;
   }                                                                             
 
 sub _num
   {
   # make a number
-  shift @_ if $_[0] eq __PACKAGE__;
-  my $ar = shift;
-  
   # let Perl's atoi() handle this one
-  my $x = $ar->to_Dec();
-  #$x =~ s/^[-]//;		# only positives, which should not happen
+  my $x = $_[1]->to_Dec();
   return $x;
   }
 
@@ -136,8 +122,7 @@ sub _num
 
 sub _add
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -156,8 +141,7 @@ sub _add
 sub _sub
   {
   # $x is always larger than $y! So overflow/underflow can not happen here
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y,$z) = @_;
+  my ($c,$x,$y,$z) = @_;
  
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -176,13 +160,13 @@ sub _sub
   # then reduce again
   __reduce($y) if $ns != $ys;
   __reduce($x) if $ns != $xs;
-  return $x;
+  return $x unless $z;
+  return $y;
   }                                                                             
 
 sub _mul
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -202,8 +186,7 @@ sub _mul
 
 sub _div
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
   
   my $r;
   # sizes must match!
@@ -230,8 +213,7 @@ sub _div
 
 sub _inc
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = @_;
+  my ($x) = $_[1];
   my $xs = $x->Max()+1; my $ns = $xs+1;
   $ns = (int($ns / $chunk)+1)*$chunk;
   $x->Resize($ns) if $xs != $ns;
@@ -242,19 +224,19 @@ sub _inc
 sub _dec
   {
   # overflow into negative!
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = @_;
+  my ($x) = $_[1];
 
   # will only get smaller
-  $x->decrement() if $x->Max() > 0;	# negative Max => x == 0
+  # negative Max => x == 0, but spare us Max() for huge numbers
+  $x->decrement() if $x->Size() == $chunk && $x->Max() > 0;
+  #$x->decrement() if $x->Max() > 0;	# negative Max => x == 0
   __reduce($x);
   }
 
 sub _and
   {
   # bit-wise AND of two numbers
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -273,8 +255,7 @@ sub _and
 sub _xor
   {
   # bit-wise XOR of two numbers
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -293,8 +274,7 @@ sub _xor
 sub _or
   {
   # bit-wise OR of two numbers
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -313,12 +293,11 @@ sub _or
 sub _gcd
   {
   # Greatest Common Divisior
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # test un-resized for zero
-  return __reduce($x->Clone()) if _is_zero($y);
-  return __reduce($y->Clone()) if _is_zero($x);
+  return __reduce($x->Clone()) if _is_zero($c,$y);
+  return __reduce($y->Clone()) if _is_zero($c,$x);
 
   # Original, Bit::Vectors Euklid algorithmn
   # sizes must match!
@@ -397,8 +376,7 @@ sub _gcd
 
 sub _acmp
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x, $y) = @_;
+  my ($c,$x, $y) = @_;
 
   my $xm = $x->Max(); my $ym = $y->Max();
   my $diff = ($xm - $ym);
@@ -416,17 +394,14 @@ sub _acmp
 
 sub _len
   {
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = @_;
   # return length, aka digits in decmial, costly!!
-  return length($x->to_Dec());
+  return length($_[1]->to_Dec());
   }
 
 sub _digit
   {
   # return the nth digit, negative values count backward; this is costly!
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$n) = @_;
+  my ($c,$x,$n) = @_;
 
   $n++; return substr($x->to_Dec(),-$n,1);
   }
@@ -434,8 +409,7 @@ sub _digit
 sub _pow
   {
   # return power
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x,$y) = @_;
+  my ($c,$x,$y) = @_;
 
   # new size is appr. exponent-size * powersize
   my $xs = $x->Max()+1; my $ys = $y->to_Dec();
@@ -443,19 +417,20 @@ sub _pow
     {
     # Bit::Vector v6.0 is O(N*N) for 2 ** x :-(
     # so cheat
-    my $ns = $ys+2; 	# one bit more for unsigned
-    $x->Resize($ys+2);
-    $x->Empty();
-    $x->Bit_On($ns-2);    
-    # halve time for 2 ** $x as long as BV is O(N*N) there :/
-    #$xs -- if (($x->bit_test(0) == 0) && ($x->bit_test(1) == 1))
-    return $x;	# no __reduce necc.
+    my $ns = $ys+2; 				# one bit more for unsigned
+    $ns = (int($ns / $chunk) + 1) * $chunk;	# chunked
+    $x->Resize($ns);
+    #$x->Empty();
+    $x->Bit_Off(1);				# clear the only bit set 
+    $x->Bit_On($ys);				# and set this    
+    return $x;					# no __reduce() neccessary
     }
   my $ns = $ys * $xs + 1;
   $ns = (int($ns / $chunk)+1)*$chunk;
   # print ${_str($x)}, " ", ${_str($y)}," max:$xs val:$ys => $ns\n";
   $x->Resize($ns) if $xs != $ns;
-  $y = $y->Clone() if ($y eq $x);	# BitVect does not like self_pow
+  $y = $y->Clone() if ($y == $x);	# BitVect does not like self_pow
+					# use ref() == ref() to compare addr.
   $x->Power($x,$y);
   __reduce($x) if $xs != $ns;
   }
@@ -466,8 +441,7 @@ sub _pow
 sub _is_zero
   {
   # return true if arg is zero
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = shift;
+  my ($x) = $_[1];
 
   return 0 if $x->Size() != $bits;	# if size mismatch
   return $x->equal($zero_);
@@ -476,8 +450,7 @@ sub _is_zero
 sub _is_one
   {
   # return true if arg is one
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = shift;
+  my ($x) = $_[1];
 
   return 0 if $x->Size() != $bits;	# if size mismatch
   return $x->equal($one_);
@@ -486,16 +459,14 @@ sub _is_one
 sub _is_even
   {
   # return true if arg is even
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = shift;
+  my ($x) = $_[1];
   return (!$x->bit_test(0))||0;
   }
 
 sub _is_odd
   {
   # return true if arg is odd
-  shift @_ if $_[0] eq __PACKAGE__;
-  my ($x) = shift;
+  my ($x) = $_[1];
   return $x->bit_test(0) || 0;
   }
 
@@ -505,9 +476,7 @@ sub _is_odd
 sub _check
   {
   # no checks yet, pull it out from the test suite
-  shift @_ if $_[0] eq __PACKAGE__;
-
-  my ($x) = shift;
+  my ($x) = $_[1];
   return "$x is not a reference to Bit::Vector" if ref($x) ne 'Bit::Vector';
   return 0;
   }
@@ -544,7 +513,7 @@ __END__
 
 =head1 NAME
 
-Math::BigInt::BitVect - Perl module to use Bit::Vector for Math::BigInt
+Math::BigInt::BitVect - Use Bit::Vector for Math::BigInt routines
 
 =head1 SYNOPSIS
 

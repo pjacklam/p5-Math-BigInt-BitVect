@@ -1,7 +1,7 @@
 
 Known bugs:
 
-* bgcd benchmark causes divide by zero fault in GCD().
+* None known
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!

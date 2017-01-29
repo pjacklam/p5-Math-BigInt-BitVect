@@ -14,7 +14,7 @@ use Benchmark;
 
 my $digits = shift || 100;
 my $fibo = shift || 100;
-my $c = 2000;
+my $c = 400;
 
 # takes longest when $x and $y are consecutive fibonacci numbers
 my $x = Math::Big::fibonacci($fibo);
@@ -37,5 +37,9 @@ print "timing bgcd() with $fibo\'th fibonacci and $digits rand digits:\n\n";
 timethese ( $c, 
   {
   bgcd_fibu => sub { $z = $x->bgcd($y); },
+  } ) ;
+timethese ( $c*15, 
+  {
   bgcd_rand => sub { $z = $u->bgcd($v); }
-  } );
+  } ) ;
+
