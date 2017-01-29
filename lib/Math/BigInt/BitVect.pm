@@ -12,7 +12,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '1.05';
+$VERSION = '1.06';
 
 use Bit::Vector;
 
@@ -221,22 +221,36 @@ sub _div
 sub _inc
   {
   my ($x) = $_[1];
-  my $xs = $x->Max()+1; my $ns = $xs+1;
-  $ns = (int($ns / $chunk)+1)*$chunk;
-  $x->Resize($ns) if $xs != $ns;
-  $x->increment();
-  __reduce($x);
+
+  # and overflow can only occur if the leftmost bit and the rightmost bit are
+  # both 1 (we don't look at the other bits)
+  
+  my $xs = $x->Size();
+  if ($x->bit_test($xs-1) & $x->bit_test(0))
+    {
+    $x->Resize($xs + $chunk);	# make one bigger
+    $x->increment();
+    __reduce($x);
+    }
+  else
+    {
+    $x->increment();		# can't overflow, so no resize/reduce necc.
+    }
+  $x;
+
+  #my $xs = $x->Max()+1; my $ns = $xs+1;
+  #$ns = (int($ns / $chunk)+1)*$chunk;
+  #$x->Resize($ns) if $xs != $ns;
+  #$x->increment();
+  #__reduce($x);
   }
 
 sub _dec
   {
-  # overflow into negative!
+  # input is >= 1
   my ($x) = $_[1];
 
-  # will only get smaller
-  # negative Max => x == 0, but spare us Max() for huge numbers
-  $x->decrement() if $x->Size() == $chunk && $x->Max() > 0;
-  #$x->decrement() if $x->Max() > 0;	# negative Max => x == 0
+  $x->decrement(); 	# will only get smaller, so reduce afterwards
   __reduce($x);
   }
 
@@ -401,6 +415,9 @@ sub _acmp
 
 sub _len_bits
   {
+  # should find out if it returns the length-1 (f.i between 32 and 99 it will
+  # be off by -1, meaning that between 32 and 128 it should use _len, otherwise
+  # it can return the shortcut)
   return int($_[1]->Max() * 0.3 * 1.004 + 0.5)+1;
   }
 
@@ -498,7 +515,6 @@ sub __reduce
   # internal reduction to make minimum size
   my ($bv) = @_;
 
-  return $bv;
   # print "reduce: ",$bv->Size()," max: ",$bv->Max(),"\n";
   my $size = $bv->Size();
   return $bv if $size <= $chunk;			# not smaller

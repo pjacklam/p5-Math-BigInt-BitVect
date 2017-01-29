@@ -8,7 +8,7 @@ BEGIN
   $| = 1;
   # chdir 't' if -d 't';
   unshift @INC, '../lib'; # for running manually
-  plan tests => 56;
+  plan tests => 60;
   }
 
 # testing of Math::BigInt::BitVect, primarily for interface/api and not for the
@@ -78,6 +78,16 @@ $x = $C->_new(\"123"); $y = $C->_new(\"1111");
 $x = $C->_new(\"7"); $y = $C->_new(\"5"); ok (${$C->_str($C->_and($x,$y))},5);
 $x = $C->_new(\"6"); $y = $C->_new(\"1"); ok (${$C->_str($C->_or($x,$y))},7);
 $x = $C->_new(\"9"); $y = $C->_new(\"6"); ok (${$C->_str($C->_xor($x,$y))},15);
+
+# _inc, _dec
+$x = $C->_new(\"7"); ok (${$C->_str($C->_inc($x))},8);
+$x = $C->_new(\"7"); ok (${$C->_str($C->_dec($x))},6);
+
+# check that __reduce really works
+my $v = '1' . '0' x 1000; $x = $C->_new(\$v); 
+$v = '1' . '0' x 999; $y = $C->_new(\$v);
+ok (${$C->_str($C->_div($x,$y))},10);
+ok ($x->Size(),32);			# min chunk size => 32 bit
 
 my $r;
 # to check bit-counts
