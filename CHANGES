@@ -71,6 +71,20 @@
  * tests from BigInt v1.55 - 3877 tests
 2002-03-24 v1.11 Tels
  * tests from BigInt v1.60 - 4057 tests
+2002-09-30 v1.11_01 Tels (never released)
+ * require Bit::Vector 6.3
+ * removed unused binary GCD algorithmn
+ * removed unnecc. tests for $x or $y == 0 since Bit::Vector 6.3 handles these
+2004-01-05 v1.12 Tels
+ * tests from BigInt v1.68 - 4572 tests
+ * require Math::BigInt v1.68
+ * hang in test 1635 due to _fac() not handling $x == 0 properly
+ * _lsft() created non-chunked sizes (thus failures in broot())
+ * streamlined code (removed return statements etc)
+ * _as_hex() and _as_bin() handle the $x == 0 case properly
+ * _pow() handles 0 ** Y properly
+ * __reduce() check for Y's size in _gcd() was wrongly checking $x->Size()
+ * _check() method checks for non-chunked sizes
 
 Please send me test-reports, your experiences with this and your ideas - I love
 to hear about my work!

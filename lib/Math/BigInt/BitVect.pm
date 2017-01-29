@@ -12,7 +12,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '1.11';
+$VERSION = '1.12';
 
 use Bit::Vector;
 
@@ -50,8 +50,7 @@ sub _from_hex
   $$h =~ s/^[+-]?0x//;
   my $bits = length($$h)*4+4;			# 0x1234 => 4*4+4 => 20 bits
   $bits = (int($bits / $chunk) + 1) * $chunk;
-  #print "new hex $bits\n";
-  return Bit::Vector->new_Hex($bits,$$h);
+  Bit::Vector->new_Hex($bits,$$h);
   }
 
 sub _from_bin
@@ -61,7 +60,6 @@ sub _from_bin
   $$b =~ s/^[+-]?0b//;
   my $bits = length($$b)+4;			# 0x1234 => 4*4+4 => 20 bits
   $bits = (int($bits / $chunk) + 1) * $chunk;
-  #print "new bin $bits\n";
   Bit::Vector->new_Bin($bits,$$b);
   }
 
@@ -105,23 +103,20 @@ sub _num
   {
   # make a number
   # let Perl's atoi() handle this one
-  my $x = $_[1]->to_Dec();
-  return $x;
+  $_[1]->to_Dec();
   }
 
 sub _as_hex
   {
   my $x = $_[1]->to_Hex();
-  $x =~ s/^[0]+//;
-  $x = '0x' . $x;
+  $x =~ s/^[0]+(\d)/0x$1/;
   \$x;
   }
 
 sub _as_bin
   {
   my $x = $_[1]->to_Bin();
-  $x =~ s/^[0]+//;
-  $x = '0b' . $x;
+  $x =~ s/^[0]+(\d)/0b$1/;
   \$x;
   }
 
@@ -254,7 +249,6 @@ sub _and
   my $xs = $x->Size(); my $ys = $y->Size();
   my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
   $ns = (int($ns / $chunk)+1)*$chunk;
-  #print "and $xs $ys $ns\n";
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
  
@@ -273,7 +267,6 @@ sub _xor
   my $xs = $x->Size(); my $ys = $y->Size();
   my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
   $ns = (int($ns / $chunk)+1)*$chunk;
-  #print "xor $xs $ys $ns\n";
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
  
@@ -292,7 +285,6 @@ sub _or
   my $xs = $x->Size(); my $ys = $y->Size();
   my $ns = max($xs,$ys);	# highest bits in $x,$y are zero
   $ns = (int($ns / $chunk)+1)*$chunk;
-  #print "or $xs $ys $ns\n";
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
  
@@ -307,10 +299,6 @@ sub _gcd
   # Greatest Common Divisior
   my ($c,$x,$y) = @_;
 
-  # test un-resized for zero
-  return __reduce($x->Clone()) if _is_zero($c,$y);
-  return __reduce($y->Clone()) if _is_zero($c,$x);
-
   # Original, Bit::Vectors Euklid algorithmn
   # sizes must match!
   my $xs = $x->Size(); my $ys = $y->Size();
@@ -318,70 +306,11 @@ sub _gcd
   $ns = (int($ns / $chunk)+1)*$chunk;
   $x->Resize($ns) if $xs != $ns;
   $y->Resize($ns) if $ys != $ns;
-  #my $w = $x->Shadow();
-  $x->GCD($x,$y); __reduce($y) if $ns != $xs; __reduce($x) if $ns != $xs;
-  return $x;
-
-  # Algorithmn B, Binary method after Knuth, Vol. 2, Third Edition, pp 338
-  # one of $x,$y must != 0
-  # not used yet since buggy
-
-  # variables 
-  my ($z,$t,$s);		# z: flag to avoid copying u,v => t
-  my $u = $x->Clone(); 		# s: amount of shfts
-  my $v = $x->Clone(); 		# t: temporary variable
-
-  # B1: find power of 2
-  my $k = 0; $k++ while (($u->bit_test($k) & $v->bit_test($k)) == 1);
- 
-  # B1: and divide by 2 ** $k
-  $u->shift_right($k); $v->shift_right($k);
-
-  # B2: initialize
-  if ($u->bit_test(0) == 1)		# u is odd?
-    {
-    $z = -1; $t = $v->Clone();		# use -v
-    }
-  else
-    {
-    $z = 1; $t = $u->Clone();
-    }
-  while ($t->Max() > 0)			# Max() < 0 if $t == 0
-    {
-    # B3, B4: halve $t as long as it is even
-    $s = 0; $s ++ while ($t->bit_test(0) == 0);
-    if ($s > 0)
-      {
-      $t->shift_right($s);		# halve and 
-      __reduce($t);			# make smaller
-      }
-    # B5 reset max(u,v)
-    if ($z == 1)
-      {
-      $u = $t->Clone();
-      }
-    else
-      {
-      $v = $t->Clone();
-      }
-    if (_acmp($u,$v) > 0)		# u > v?
-      {
-      $z = 1; $t = $u->Clone(); _sub($t,$v);
-      }
-    else
-      {
-      $z = -1; $t = $v->Clone(); _sub($t,$u);
-      }
-    } # end while $t == 0
-  
-  # $t == 0, output is $u * (2 ** $k) 
-  $u->shift_left($k);
-  return __reduce($u);
- 
-  #__reduce($y) if $ns != $xs;
-  #__reduce($x) if $ns != $xs;
+  $x->GCD($x,$y);
+   __reduce($y) if $ns != $ys;
+   __reduce($x) if $ns != $xs;
+  $x;
   }
-
 
 ##############################################################################
 # testing
@@ -390,10 +319,10 @@ sub _acmp
   {
   my ($c,$x, $y) = @_;
 
-  my $xm = $x->Max(); my $ym = $y->Max();
+  my $xm = $x->Size(); my $ym = $y->Size();
   my $diff = ($xm - $ym);
-  return -1 if $diff < 0;
-  return 1 if $diff > 0;
+
+  return $diff <=> 0 if $diff != 0;
 
   # used sizes are the same, so no need for Resizing/reducing
   $x->Lexicompare($y);
@@ -404,13 +333,13 @@ sub _len_bits
   # should find out if it returns the length-1 (f.i between 32 and 99 it will
   # be off by -1, meaning that between 32 and 128 it should use _len, otherwise
   # it can return the shortcut)
-  return int($_[1]->Max() * 0.3 * 1.004 + 0.5)+1;
+  int($_[1]->Max() * 0.3 * 1.004 + 0.5)+1;
   }
 
 sub _len
   {
   # return length, aka digits in decmial, costly!!
-  return length($_[1]->to_Dec());
+  length($_[1]->to_Dec());
   }
 
 sub _digit
@@ -418,7 +347,7 @@ sub _digit
   # return the nth digit, negative values count backward; this is costly!
   my ($c,$x,$n) = @_;
 
-  $n++; return substr($x->to_Dec(),-$n,1);
+  substr($x->to_Dec(),-($n+1),1);
   }
 
 sub _fac
@@ -426,6 +355,11 @@ sub _fac
   # factorial of $x
   my ($c,$x) = @_;
 
+  if (_is_zero($c,$x))
+    {
+    $x = _one();		# not $one_ since we need a copy/or new object!
+    return $x;
+    }
   my $n = _copy($c,$x);
   $x = _one();			# not $one_ since we need a copy/or new object!
   while (!_is_one($c,$n))
@@ -439,6 +373,13 @@ sub _pow
   {
   # return power
   my ($c,$x,$y) = @_;
+
+  if (_is_zero($c,$x))
+    {
+    $x = _zero();				# 0 ** Y => 0
+    $x = _one() if _is_zero($c,$y);		# 0 ** 0 => 1
+    return $x;
+    }
 
   # new size is appr. exponent-size * powersize
   my $xs = $x->Max()+1; my $ys = $y->to_Dec();
@@ -487,7 +428,8 @@ sub _lsft
     }
   $y = _num($c,$y);			# need scalar for Resize/Move_Left - ugh
   my $size = $x->Size() + 1 + $y;	# y and one more
-  $x->Resize($size);
+  my $ns = (int($size / $chunk)+1)*$chunk;
+  $x->Resize($ns);
   $x->Move_Left($y);
   __reduce($x);				# to minimum size
   }
@@ -501,7 +443,7 @@ sub _is_zero
   my ($x) = $_[1];
 
   return 0 if $x->Size() != $bits;	# if size mismatch
-  return $x->equal($zero_);
+  $x->equal($zero_);
   }
 
 sub _is_one
@@ -510,21 +452,23 @@ sub _is_one
   my ($x) = $_[1];
 
   return 0 if $x->Size() != $bits;	# if size mismatch
-  return $x->equal($one_);
+  $x->equal($one_);
   }
 
 sub _is_even
   {
   # return true if arg is even
   my ($x) = $_[1];
-  return (!$x->bit_test(0))||0;
+  
+  (!$x->bit_test(0)) || 0;
   }
 
 sub _is_odd
   {
   # return true if arg is odd
   my ($x) = $_[1];
-  return $x->bit_test(0) || 0;
+  
+  $x->bit_test(0) || 0;
   }
 
 ###############################################################################
@@ -535,7 +479,12 @@ sub _check
   # no checks yet, pull it out from the test suite
   my ($x) = $_[1];
   return "$x is not a reference to Bit::Vector" if ref($x) ne 'Bit::Vector';
-  return 0;
+  my $ns = (int($x->Size() / $chunk))*$chunk;
+  if ($x->Size() != $ns)
+    {
+    return "Size($x) is " . $x->Size() . ", expected $ns.";
+    }
+  0;
   }
 
 sub __reduce
@@ -555,11 +504,10 @@ sub __reduce
   # need to make smaller? (real_size =-inf if $bv == 0!)
   elsif (($size - $real_size) > $chunk)
     {
-    my $new_size = $size;
-    $new_size = (int($real_size / $chunk) + 1) * $chunk;
+    my $new_size = (int($real_size / $chunk) + 1) * $chunk;
     $bv->Resize($new_size) if $new_size != $size;
     }
-  return $bv;
+  $bv;
   }
 
 1;
@@ -584,11 +532,11 @@ the same terms as Perl itself.
 
 =head1 AUTHOR
 
-Tels http://bloodgate.com in 2001.
-The used module Bit::Vector is by Steffen Beyer. Thanx!
+(c) 2001, 2002, 2003, 2004 by Tels http://bloodgate.com 
+The module Bit::Vector is (c) by Steffen Beyer. Thanx!
 
 =head1 SEE ALSO
 
-L<Math::BigInt>, L<Math::BigInt::Calc>, L<Bit::Vector>.
+L<Math::BigInt>, L<Math::BigInt::Calc>, L<Math::BigInt::GMP>, L<Bit::Vector>.
 
 =cut

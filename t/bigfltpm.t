@@ -9,8 +9,8 @@ BEGIN
   unshift @INC, '../lib'; # for running manually
   my $location = $0; $location =~ s/bigfltpm.t//;
   unshift @INC, $location; # to locate the testing files
-  # chdir 't' if -d 't';
-  plan tests => 1627;
+  chdir 't' if -d 't';
+  plan tests => 1772;
   }
 
 use Math::BigInt lib => 'BitVect';
